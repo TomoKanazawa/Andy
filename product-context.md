@@ -240,30 +240,6 @@ Every winner follows the same pattern:
 
 ---
 
-## Key Risks (Honest Assessment)
-
-### Near-fatal risk: Timing
-- Build + validate: 12–18 months
-- Sell to first hospitals: 12–24 months
-- Total: 24–42 months
-- Epic can ship competing features: 6–12 months from announcement
-- This timing mismatch is the single biggest threat
-
-### Significant risks
-- **Navina is one feature sprint away** — their knowledge graph + 600 algorithms + 10K clinicians make adding temporal features an incremental extension
-- **"Data quality" isn't a purchasing category** — must reframe as revenue/risk adjustment/safety
-- **Clinical NLP accuracy** — hallucination rates of 1.5–3.5% are potentially fatal for a "truth" product without robust fact-checking
-- **Per-site deployment** — each hospital requires individual configuration (3–12 months each)
-
-### Mitigating factors
-- Nobody has built this exact product yet (confirmed across exhaustive search)
-- The technical difficulty IS the moat — temporal supersession is genuinely hard
-- Cures Act legally protects data access
-- Regard proves the third-party-on-Epic model works at scale
-- FDA path is clear (Non-Device CDS)
-
----
-
 ## Data Access: What Epic's FHIR APIs Actually Provide
 
 - **750+ no-cost FHIR R4 APIs** at open.epic.com
@@ -275,10 +251,85 @@ Every winner follows the same pattern:
 
 ---
 
+## Product Name: Andy
+
+**useandy.com** — "The AI that already reviewed the chart for you."
+
+Human names are the proven pattern in healthcare AI (Epic's "Art", Regard's "Max", Suki). The name conveys a helpful colleague, not a system claiming authority. Hospital buyers (CMIOs/CIOs) are tech-savvy and don't need clinical naming.
+
+---
+
+## Customer and User
+
+**Buyer:** CMIO or VP of Population Health at a value-based care organization (IPA, ACO, large primary care group). They care about revenue capture, quality scores, and physician retention.
+
+**User:** Primary care physician (internal medicine / family medicine) doing pre-visit chart review in VBC practices. Sees 20+ patients/day, spends 5+ minutes per patient navigating charts.
+
+**Target patient profile:** Complex chronic Medicare patient — e.g., 67-year-old woman with Type 2 diabetes, hypertension, CKD stage 3, depression. Sees PCP quarterly, endocrinologist twice/year, nephrologist annually. 200+ notes across 15 years from 6+ providers. Problem list missing CKD. Medication list still shows metformin discontinued 4 months ago by nephrologist.
+
+---
+
+## Why Pre-Visit is the Right Wedge
+
+Chart review (the *input* side — reading records to understand the patient) consumes 33% of all EHR time — the single largest activity, exceeding documentation (24%). The entire ambient scribe market ($600M, 30+ competitors) attacks documentation. Almost nobody attacks chart review.
+
+Pre-visit is the only workflow moment with **direct VBC revenue linkage** — HCC recapture and RAF score improvement happen here. One health system generated $18.5M in additional revenue from pre-visit HCC recapture (6x ROI). Care transitions are a bigger safety problem but require a different buyer and sales motion — that's the expansion path at 18-24 months.
+
+The "what changed since last visit" differential view appears to be an **unoccupied product position** — no tool in the market, including Navina, explicitly offers this.
+
+---
+
+## What a PCP Reviews Pre-Visit (12 Data Types)
+
+Always reviewed: problem list, medication list, allergies, recent labs, recent vitals, last visit note, chief complaint.
+
+Usually reviewed: specialist consultation notes, imaging reports, care gaps/health maintenance, immunization status, hospitalization/ED records.
+
+Each maps to FHIR R4 with US Core profiles. The three data types most urgently needing temporal supersession detection: **problem lists** (40% of diagnoses missing), **medication lists** (60% have discrepancies), **clinical notes** (82% is copy-pasted/auto-imported).
+
+---
+
+## Development Data Strategy (Finalized)
+
+### Epic's sandbox is useless for clinical AI
+~8 test patients, minimal data, no real notes, no messiness. Designed for OAuth testing, not product development.
+
+### Approach: LLM-based via API, not custom NLP training
+We use Claude/GPT-4 via API for note parsing, temporal reasoning, and contradiction detection. No custom model training needed. Specialized NLP datasets (i2b2, MedNLI) are used only as evaluation benchmarks to measure accuracy.
+
+### Development datasets (in priority order)
+
+| # | Dataset | What it is | Role for Andy |
+|---|---------|-----------|---------------|
+| 1 | **Synthea** | Free software that generates fake patients with realistic medical histories in FHIR R4. Longitudinal timelines of visits, diagnoses, medications, labs spanning years. | Core foundation. Generate 1,000+ primary care patients. Outputs 10 of 12 pre-visit data types natively. |
+| 2 | **Chatty-Notes + custom LLM pipeline** | Takes Synthea's structured data and uses LLMs to write realistic doctor notes for each visit. | Fill Synthea's biggest gap: it has no narrative clinical text. Generate progress notes, specialist letters, discharge summaries. |
+| 3 | **Error injection layer (we build)** | Script that deliberately breaks clean Synthea data to match real-world messiness. Every error is labeled with type, severity, and ground truth. | Make data realistic. Inject: ~40% missing problem list entries, ~60% medication discrepancies, ~50% copy-paste duplication, ~30% missing specialist notes. Creates labeled evaluation corpus. |
+| 4 | **MIMIC-IV-Note** | 331,000 real discharge summaries and 2.3M radiology reports from a Boston hospital. Real messy doctor-written text. | Style reference only. Use as examples of how real notes look (abbreviations, templates, copy-paste artifacts) to calibrate LLM note generation. NOT primary development data — it's ICU-only, no primary care. |
+
+### Evaluation benchmarks (not development data)
+
+| Dataset | What it tests |
+|---------|--------------|
+| **i2b2 2012 Temporal Relations** | Does our system correctly understand when things happened? (BEFORE, AFTER, OVERLAP) |
+| **MedNLI** | Does our contradiction detection work? (agrees / contradicts / unrelated) |
+| **EMNLP 2023 Clinical Contradiction** | Larger-scale contradiction detection accuracy |
+
+### Later-stage validation
+
+| Program | When | What it provides |
+|---------|------|-----------------|
+| **Mayo Clinic Platform_Accelerate** | When prototype works | 13.6M real patient records including primary care. Apply 3x/year. |
+
+### Why MIMIC-IV was downgraded from core to reference
+MIMIC-IV is exclusively ICU data from one hospital. It has no outpatient progress notes, no specialist referral letters, no primary care problem lists, no care gaps. Our product is for primary care pre-visit prep — MIMIC-IV doesn't match the clinical context. Use it only as a style guide for realistic note generation.
+
+---
+
 ## Development Quick Reference
 
 ### Local MVP is fully buildable
-- Epic provides free sandbox FHIR server (fake patient data, real APIs) — no approval needed
+- Synthea + LLM notes + error injection gives you everything needed
+- Epic sandbox useful only for testing OAuth flow and FHIR API parsing
 - Epic's launchpad simulates in-Epic SMART on FHIR launch flow
 - Build and demo entire product on synthetic patients with contradictions, stale meds, outdated problems
 
@@ -291,34 +342,40 @@ Every winner follows the same pattern:
 - Frontend: React (SMART on FHIR JS libraries exist)
 - Backend: Python/FastAPI (best AI/NLP ecosystem)
 - Database: PostgreSQL with temporal schema
-- AI: LLM (Claude/GPT-4) for clinical note parsing + temporal reasoning
+- AI: LLM via API (Claude/GPT-4) for clinical note parsing + temporal reasoning
 - Auth: OAuth 2.0 (required by SMART on FHIR spec)
 - Infra: AWS or GCP with HIPAA BAA
 
 ---
 
-## Naming and Positioning
+## Strategy Decisions Log
 
-**Avoid** the word "truth" in product naming — it implies the system knows more than the doctor. Research shows physicians reject AI that claims authority over clinical judgment.
-
-**Better framing:**
-- "Reconciled clinical picture with evidence"
-- "What changed since you last saw this patient"
-- "Intelligent patient summary with source verification"
-- Position as an assistant that surfaces evidence, not an oracle that declares truth
+| Decision | Rationale |
+|----------|-----------|
+| **Start narrow** (temporal truth layer only) | 18 case studies: zero seed-stage companies succeeded broad. Expand to clinical intelligence platform at 18-24 months. |
+| **Pre-visit wedge** | 33% of EHR time is chart review. Only workflow moment with direct VBC revenue linkage. Far less competitive than during-encounter (ambient scribe) market. |
+| **Primary care first** | Highest chart review volume, longest patient relationships, VBC revenue alignment. Expand to ICU and ED later. |
+| **API not training** | Claude/GPT-4 handles clinical text well enough for MVP. Use NLP datasets for evaluation only. |
+| **Synthea over MIMIC-IV** | MIMIC-IV is ICU-only, no primary care. Synthea generates longitudinal primary care FHIR data matching our clinical context. |
+| **SF location** | UCSF and Stanford are innovation-friendly Epic hospitals 20 min away. Both already running AI inside SMART on FHIR. |
 
 ---
 
-## Summary of Research Artifacts Generated
+## Key Risks (Honest Assessment)
 
-Over the course of this research, the following deep-dive reports were produced (available as conversation artifacts):
+### Near-fatal risk: Timing
+- Build + validate: 12–18 months. Sell to first hospitals: 12–24 months. Total: 24–42 months.
+- Epic can ship competing features: 6–12 months from announcement.
 
-1. Hospital physician shortages and lost revenue
-2. The chart review bottleneck is finding, not reading
-3. Hospitals buy chart review tools but barely spend on guideline alignment
-4. The AI-on-Epic landscape
-5. Staleness-proof knowledge base integration feasibility analysis
-6. Temporal patient truth layer: why nobody has built it yet
-7. Zus Health and Navina: capabilities, gaps, and the missing temporal truth layer
-8. How AI startups wedge into Epic — and where a temporal truth layer fits
-9. Final validation: a real gap with near-fatal competitive risk
+### Significant risks
+- Navina is one feature sprint away from adding temporal features
+- "Data quality" isn't a purchasing category — must sell as revenue/risk adjustment/safety
+- Clinical NLP accuracy — hallucination rates of 1.5–3.5% require robust fact-checking
+- Per-site deployment — each hospital requires individual configuration
+
+### Mitigating factors
+- Nobody has built this exact product (confirmed across exhaustive search)
+- The technical difficulty IS the moat — temporal supersession is genuinely hard
+- Cures Act legally protects data access ($1M/violation penalties)
+- Regard proves third-party-on-Epic model works at 150+ hospitals
+- FDA path is clear (Non-Device CDS exemption)
