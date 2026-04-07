@@ -1,381 +1,137 @@
-# Temporal Patient Truth Layer — Product Context for Development
+# Andy — Product Context
 
-## What This Document Is
+## One-liner
+AI teammate that knows everything about your projects.
 
-This is the complete product context derived from 30+ rounds of deep market research, competitive analysis, and product design decisions. Use this to understand what we're building, why, for whom, and how it fits into the existing healthcare ecosystem. Technical specifications are covered separately.
+## What is this
+A per-project scoped knowledge base that bridges enterprise docs (Confluence, Notion, Slack, Google Docs) into a working KB that serves both humans and AI coding agents (Cursor, Claude Code, Copilot). It's what CLAUDE.md files want to be — collaborative, self-maintaining, and scalable.
 
----
+## The core insight
+Enterprise-scale KB has been impossible because everyone tries to build one giant coherent KB. The fix: create separate smaller KBs per project/team that are small enough to stay accurate. Trade org-wide coherence for per-scope coherence.
 
-## The Product in One Paragraph
+This is architecturally opposed to what every incumbent is building. Glean, Notion, Confluence, Guru — all position around "one big graph" or "single source of truth." This thesis says that's fundamentally wrong. Fragmentation isn't the disease — it's the correct architectural response to the coherence problem at scale.
 
-A single-page, problem-oriented "Current Truth" view of a patient that lives inside Epic EHR as an embedded panel. It reads all patient data (structured lists, clinical notes, labs, encounters), understands which information supersedes which using temporal reasoning, detects contradictions between sources, and surfaces what changed since the doctor last saw the patient. Every claim is linked to its source document, author, and date. It replaces the doctor's current 5–14 minute scavenger hunt across 6+ screens with a 2-minute scan of one organized page.
+## Why KB at enterprise scale fails
+- 30-40% of wiki content goes stale within 6 months — a human behavior constant, not a software variable
+- Wikis don't scale beyond ~50 people (Friday.app observation, confirmed by multiple sources)
+- Academic research confirms scope and coherence trade off against each other with decreasing returns to scale (Nesta & Saviotti 2005, Sarkar & Ramaswamy 2000)
+- Every KM product positions around "single source of truth" — yet 50-70% of KM initiatives fail
 
----
+## Why per-scope KB works
+Smaller scope means:
+- Retrieval can't fail because the search space is small enough for full context
+- Entity resolution becomes trivial (the team knows "the new dashboard" = "Product X")
+- Temporal supersession is captured naturally (the team knows Jenkins was replaced by GHA)
+- Contradictions are resolvable because they're within a single project's context
+- Git-backed markdown enables instant rollback to any known-good state (unlike knowledge graphs where noisy data corrupts nodes/edges irreversibly)
 
-## The Problem
+## The "two worlds" gap
+Two parallel knowledge universes exist that don't talk to each other:
 
-### What doctors do today
+**World 1: Enterprise docs** (Confluence, Notion, Slack, Google Docs)
+- Where humans actually write knowledge
+- Served to humans via Glean/Guru/Confluence search
+- Agents access via MCP but it's just RAG over the raw mess — no synthesis, no curation
 
-Doctors use **Epic Hyperspace** (desktop app) or **Epic Hyperdrive** (newer Chromium-based app) as their primary clinical interface. When reviewing a patient's chart before or during a visit, they navigate across an average of **6.3 different screens** per patient — results review, summary/overview, flowsheet, chart review tab, notes, medications.
+**World 2: Agent context** (CLAUDE.md, .cursorrules, AGENTS.md, Mem0, Letta)
+- Created separately, specifically for agents
+- Either manually written from scratch or auto-extracted from code only
+- Humans don't read or benefit from this
 
-Key pain statistics:
-- **5.4 minutes per encounter** spent on chart review (33% of total EHR time)
-- **70% of physicians** report difficulty finding information in the EHR
-- **50% of clinical note text** is copy-pasted from prior visits; only 18% is original
-- Average patient chart contains **359 clinical notes** (up from 5 in 2006)
-- Problem lists have **8–46% sensitivity** for major conditions (wildly inaccurate)
-- Medication lists are accurate only **21.9% of the time**
-- In the ICU, trainees **miss 22% of lab data** and **misrepresent 39%** during rounds
-- A patient was documented as "postoperative day 2" for **5.5 consecutive weeks** due to copy-paste propagation
+Nobody bridges the two. No product takes scattered enterprise docs humans already wrote, synthesizes them into a coherent per-project KB, and serves that KB to both humans (as a browsable wiki) and AI agents (via MCP/CLAUDE.md).
 
-### Why existing tools don't solve this
+## Where retrieval fundamentally fails (why write-time curation matters)
+RAG/search fails systematically on these cases. Write-time curation into a scoped KB solves them:
 
-| Tool | What it does | What it doesn't do |
-|------|-------------|-------------------|
-| **Epic's native views** | Shows raw data across tabs | No intelligence, no reconciliation, no temporal awareness |
-| **Epic Art** (AI assistant) | Chat interface over charts, generates summaries | Solves comprehension (15-20% of friction), not finding (60-80%) |
-| **Navina** ($100M raised, Best in KLAS) | Generates per-visit Patient Portrait from multi-source data | Ephemeral (regenerated each visit, not persistent), no temporal supersession, no contradiction detection, focused on VBC/risk adjustment |
-| **Zus Health** ($74M raised) | Aggregates patient data across networks, deduplicates by code | "Most recent date wins" (mechanical, not clinical), no contradiction resolution, sells to digital health startups not health systems |
-| **Regard** ($82M raised, 150+ hospitals) | Detects missed diagnoses, generates documentation | Not a truth layer — outputs diagnosis suggestions, doesn't track current patient state |
-| **Pieces Technologies** | Had 2-minute continuous updates | Acquired into revenue cycle company (SmarterNotes), no longer independent |
+1. **Terminology mismatch:** "Product X" vs "the new dashboard" vs "Project Phoenix" vs "PLAT-2847." Embedding similarity between semantically dissimilar aliases falls below thresholds. Entity resolution is stuck at 62-75% F1 after 50 years of research.
 
-### The core insight
+2. **Implicit temporal supersession:** "Pushed the GHA config, pipeline's green" doesn't trigger invalidation of Jenkins references. No explicit "we migrated from Jenkins" statement exists. Temporal KG research assumes explicit timestamps only.
 
-**60–80% of chart review friction is finding and navigating** (clicking between screens, scrolling through hundreds of notes, filtering through copy-pasted content). Only 15–20% is comprehension (reading and understanding once found). Epic Art and most AI tools attack comprehension. Nobody attacks the finding problem with temporal intelligence.
+3. **Distributed/emergent knowledge:** A decision made across 6 meetings where no single document says "we decided X." Cross-document extraction benchmarks show ~68% F1 (CodRED). Knowledge exists only as the intersection of multiple sources.
 
----
+4. **Scope-qualified contradictions:** "We use microservices" is true generally but false for billing (consolidated to monolith). Triple-based KGs struggle to represent two facts true in different contexts. Reasoning over scoped facts is PSpace-complete.
 
-## What We're Building
+## The key reframe: retrieval is the bottleneck, not inference
+If retrieval surfaces all relevant documents, the LLM reconciles perfectly at inference time. The problem is retrieval misses things — terminology drift, implicit supersession, distributed decisions. Write-time curation into a scoped KB ensures retrieval never misses because the answer already exists as a resolved, curated artifact.
 
-### The five capabilities that define this product
+This is NOT "reconciliation as a feature." This is "per-scope separation as architecture." The reconciliation happens naturally when the scope is small enough for the LLM to hold full context at write time.
 
-1. **Temporal supersession** — Knows that a cardiologist's January note overrides a PCP's September note on the same diagnosis. Not just "most recent date wins" but clinically-informed reasoning about which source should take precedence.
+## Who it serves
+Both humans AND AI coding agents:
+- **Humans:** Browse it as a wiki. Onboard new team members. Find authoritative answers about the project.
+- **AI agents:** Consume it via MCP. Cursor, Claude Code, Copilot get accurate project context on every task. Reduced hallucinations, better architectural adherence, fewer rework cycles.
 
-2. **Contradiction detection** — When the medication list says metformin but the latest note says "discontinued metformin," this is flagged explicitly rather than silently ignored.
+AI agents are the killer differentiator: a non-human consumer that uses the KB every minute without documentation fatigue. This breaks the historical KM failure pattern where wikis die because humans stop reading/writing.
 
-3. **Persistent truth layer** — Continuously maintained between visits, not regenerated on-demand. The patient's truth state is always current, not a point-in-time snapshot.
+## What this is NOT
+- NOT a search engine over raw docs (that's Glean)
+- NOT a manually-maintained wiki (that's Confluence)
+- NOT auto-generated code docs (that's Mintlify, Swimm)
+- NOT agent memory from conversations (that's Mem0, Letta)
+- NOT a codebase graph (that's Greptile, Augment Code)
+- NOT an enterprise-wide operational playbook (that's Edra)
 
-4. **"What changed since last visit"** — First-class feature. Doctor opens the view and immediately sees what's new, what's different, what contradicts their last understanding of this patient.
+## Positioning — critical
+Position as **AI coding infrastructure**, NOT knowledge management.
 
-5. **Source provenance on every claim** — Every fact shows who documented it, when, in what context. Physicians explicitly distrust systems that hide sources (Vanderbilt study: provenance was the #1 trust signal).
+| Position as... | What happens |
+|---|---|
+| "Knowledge management" / "AI wiki" | KM graveyard. Competes with free Confluence. 50-70% failure rate. Slab took 9 years to reach $3M. |
+| "AI coding context infrastructure" | New budget category. Competes with Cursor ($40/seat), Copilot Enterprise ($39/seat). $2B+ ARR companies exist. |
 
-### What the doctor sees
+The words matter. "Knowledge base" triggers the wiki graveyard. "Context layer for AI agents" triggers the AI productivity budget.
 
-A single page organized by **active problem**. Each problem is a row or card showing:
-- Current status
-- When it was last confirmed
-- Who confirmed it
-- Whether it changed since the doctor last saw this patient
-- Visual confidence indicator (green = multiple recent sources agree, yellow = stale or single-source, red = contradiction detected)
+## Three conditions for success
+1. **Position as AI coding infrastructure, not KM.** The KM category carries a death sentence. The AI coding tools category carries $2B+ ARR companies.
 
-Clicking any problem expands into the **full evidence chain**: every note, lab, specialist opinion that informs the current understanding of that problem, arranged chronologically with source attribution.
+2. **Auto-generate 80%+ of content.** Every KM failure traces to "engineers won't write docs." The product must auto-extract from code, PRs, Slack conversations, meeting notes — and only ask humans to annotate at natural workflow moments (PR reviews, architecture decisions, incident responses).
 
-### What it is NOT
+3. **Show measurable AI agent improvement.** If the product proves Cursor/Claude Code produce better code when connected to the KB — reduced hallucinations, fewer rework cycles, better architecture adherence — it creates quantifiable ROI that traditional KM tools never had.
 
-- NOT a chat interface over the chart (that's Epic Art)
-- NOT a missed diagnosis detector (that's Regard)
-- NOT an ambient documentation tool (that's Abridge)
-- NOT a data aggregation platform (that's Zus Health)
-- NOT a point-in-time summary (that's Navina)
-- NOT a clinical decision support tool making treatment recommendations
+## Context layer, not automation
+Focus on being the knowledge layer that makes every agent better, not an agent itself. Engineering tasks are too varied to automate coherently — unlike ITSM (Edra's domain) where "handle a password reset" has the same 5 steps every time. Let Cursor automate the coding. Let Claude Code automate the debugging. Andy makes both of them smarter by giving them accurate project context.
 
-It is the **document that should exist but doesn't** — the continuously-maintained, temporally-aware current truth about each patient.
+Be the brain, not the hands.
 
----
-
-## How It Lives Inside Epic
-
-### Integration mechanism
-
-The app renders as an **embedded panel or tab within Epic** using the **SMART on FHIR** standard. Epic opens an iframe inside its interface; our web app renders there. To the doctor, it looks like part of Epic.
-
-How it works technically:
-1. Doctor opens a patient chart in Epic
-2. Clicks our app's button (configured by the hospital's IT team)
-3. Epic sends our app the patient ID + authentication token via SMART on FHIR
-4. Our app calls Epic's FHIR APIs to pull patient data (and/or retrieves from our persistent backend store)
-5. Our app renders the "current truth" page inside that iframe
-
-### What this means for the UI
-
-- It is a **web application** (React frontend) rendered inside Epic's application frame
-- Epic Hyperspace = Windows desktop app (legacy, most hospitals today)
-- Epic Hyperdrive = Chromium-based app (the future, actively migrating)
-- In both cases, our app appears as a panel/tab alongside Epic's native content — not a popup, not a separate window
-- The hospital's IT team controls **where** our app appears (which tab, how prominent)
-- We do NOT need Epic corporate's permission to integrate — we need each **hospital's** IT team to configure access
-- Listing on Epic's App Showroom (optional, requires Epic review) helps scale but is not required to operate
-
-### Push vs. pull
-
-The proven pattern from successful AI startups (Navina at 86% adoption, Regard at 150+ hospitals) is:
-- **Primary mode: Pull** — doctor opens the view before seeing the patient (pre-visit prep)
-- **Secondary mode: Push** — a single badge/card via CDS Hooks when the patient's truth state has materially changed (new hospitalization, contradictory diagnosis). NOT pop-up alerts (96% override rate, alert fatigue is severe)
-
----
-
-## The Market
-
-### Who buys this
-
-**Primary target: Value-based care organizations and large primary care groups**
-- CMIOs (Chief Medical Information Officers) and VPs of Population Health
-- Same buyer profile as Navina's existing customers
-- VBC incentives align (better data → better risk adjustment → more revenue)
-
-**Entry wedge: Primary care pre-visit preparation**
-- Highest aggregate chart review volume
-- Longest patient relationships requiring longitudinal tracking
-- "What changed since last visit" is the most natural fit
-- VBC revenue framing (missed HCC codes, RAF score improvement)
-
-**Expansion paths:**
-- ICU (trajectory detection: is this patient getting better or worse?)
-- Emergency department (rapid distillation of unknown patients)
-- Specialty care (oncology, complex chronic disease management)
-
-### Market validation
-
-- **400+ hospitals** have purchased chart review / clinical workflow tools from third parties
-- KLAS created a formal category: **"Clinician Digital Workflow"**
-- **57% of health system C-suites** rank AI clinical solutions as #1 tech initiative (up from 19% in 2023)
-- **$275M+ in combined VC** invested in chart review tools (Regard, Navina, TransformativeMed, Pieces)
-- Navina achieves **86% weekly active usage** and **61% chart review time reduction**
-- Regard demonstrates **$4.4M annual revenue uplift** at a single health system through better diagnosis capture
-
-### How to frame the ROI
-
-Do NOT sell this as "data quality" or "temporal truth" — hospitals don't buy that category. Sell it as:
-- **Missed diagnosis capture** → revenue from correct risk coding
-- **RAF score improvement** → higher VBC contract payments
-- **Chart review time reduction** → physician capacity and throughput
-- **Reduced adverse events** → from stale medication lists and outdated problem lists
-- **Physician satisfaction/retention** → reducing burnout-driven turnover
-
----
-
-## Competitive Landscape
-
-### Direct competitors (none exact, several adjacent)
-
-| Company | Funding | What they do | Gap vs. our product |
-|---------|---------|-------------|-------------------|
-| **Navina** | $100M | Per-visit Patient Portrait using knowledge graph | Ephemeral (not persistent), no formal temporal supersession, no contradiction detection, VBC-focused only |
-| **Zus Health** | $74M | FHIR data aggregation + deduplication across networks | "Most recent date wins" (mechanical), no clinical reasoning, sells to digital health startups not health systems |
-| **Regard** | $82M | Missed diagnosis detection + documentation | Not a truth layer — outputs diagnosis suggestions, doesn't maintain patient state |
-| **Layer Health** | $21M | LLM-based longitudinal chart reasoning | Very early, MIT-founded, potentially closest but unclear product |
-| **Mendel AI** | $40M+ | Clinical hypergraph for "lifelong medical journey" | Life sciences focus, not point-of-care delivery |
-| **Epic Art** | Native | AI chat/summaries over patient charts | Comprehension tool, not temporal truth layer. "Since last seen" summaries exist but lack formal supersession or contradiction detection |
-
-### The existential threat: Epic
-
-Epic is the #1 risk. Key facts:
-- **42% of US acute care hospitals**, 325M patient records
-- Art already does **16M+ summary requests/month**
-- Cosmos model trained on **300M patients, 8B+ encounters**
-- Agent Factory (announced HIMSS 2026) enables custom AI agents
-- Pattern: partner → learn → build → compete (ambient scribes are the live cautionary tale — Epic shipped native scribe 6 months after announcement, third-party vendors already failing)
-- **Estimated window: 2–3 years** before Epic builds "good enough" native temporal intelligence
-
-### Why the window exists
-
-- Epic's Art solves **comprehension** (chat over charts). Our product solves **finding** (temporal truth). Different problems.
-- Temporal supersession logic is genuinely hard — nobody has solved it, including Epic
-- The Cures Act legally protects third-party FHIR read access ($1M/violation penalties)
-- 3 active antitrust lawsuits against Epic create regulatory pressure for openness
-- Regard proves the read-heavy-from-Epic third-party model works at 150+ hospitals
-
----
-
-## What Doctors Want (Research-Backed Design Principles)
-
-From the Vanderbilt ethnographic study (732 coded excerpts, 13 clinicians):
-
-1. **Abstraction over filtration** (240 mentions) — Compress detail without hiding it. Layered summary with drill-down. Doctors explicitly distrust systems that filter/hide data. They'd rather see everything compressed than have an AI decide what's important.
-
-2. **Provenance** (78 of 175 reliability mentions) — Who said this, when, does it contradict something else? This is the #1 trust signal. Every claim must be traceable to its source.
-
-3. **Data age** (32 reliability mentions) — Is this current or from 3 years ago? Visual indicators of freshness/staleness.
-
-4. **Problem-oriented + temporal organization** — Doctors think in problems/systems (the Assessment & Plan structure) but need temporal context within each problem. Organize by problem, show what changed within each.
-
-5. **Show contradictions, don't resolve them** — Doctors want to see conflicting information and resolve it themselves. Don't be an oracle that declares truth — be an assistant that surfaces the evidence.
-
-### Trust architecture (critical)
-
-- **Every claim must link to source** — following Abridge's "Linked Evidence" model (clickable annotations mapping to source documents)
-- **Confidence indicators** — show whether a fact is well-supported (multiple recent sources) or uncertain (single source, stale)
-- **Contradictions shown explicitly** — flagged for physician review, not silently resolved
-- Combining high explainability with high confidence **reduced clinician override rates from 87.6% to 33.3%** in one study
-- Position as "reconciled clinical picture with evidence" — NOT "current truth" (the word "truth" implies the system knows more than the doctor)
-
----
-
-## How Successful AI Startups Integrated Into Epic
-
-Every winner follows the same pattern:
-
-| Company | UI Pattern | Integration | Adoption Result |
-|---------|-----------|-------------|----------------|
-| **Regard** | Sidebar panel, proactive draft note | Embedded in Epic | 150+ hospitals, 30% time savings |
-| **Navina** | One-page Patient Portrait | Chrome extension → Epic BPA → Showroom | 86% weekly adoption, 61% prep time reduction, 90% adoption week one at Jefferson City |
-| **Abridge** | Recording button in Haiku → draft note in Epic tab | SMART on FHIR + Epic Workshop partnership | 250+ health systems, 86% less writing effort |
-| **TransformativeMed** | Replaces default patient list with specialty dashboards | Native embedding (Cerner MPages, expanding to Epic) | 2026 Best in KLAS, 45 min/day saved |
-
-**Universal rules:**
-- Embed inside Epic, never replace it
-- Pre-load value before the encounter
-- Consolidated information in one place beats scattered alerts
-- Zero extra navigation steps
-- Show provenance obsessively
-
----
-
-## Regulatory and Compliance Context
-
-- **FDA**: January 2026 revised CDS guidance creates clear Non-Device CDS exemption for tools that present reconciled clinical information for physician review (not autonomous recommendations). Our product likely qualifies.
-- **HIPAA**: Standard requirements. Need BAA with cloud provider (AWS/GCP). HITRUST e1 certification achievable for ~$30K in 10 weeks.
-- **Cures Act / Information Blocking**: Hospitals legally required to provide third-party FHIR read access. $1M/violation penalties. HHS-OIG issued first enforcement letters in February 2026.
-- **No HITRUST required on day one** — can start with SOC 2 + BAA, add HITRUST for enterprise sales later.
-
----
-
-## Data Access: What Epic's FHIR APIs Actually Provide
-
-- **750+ no-cost FHIR R4 APIs** at open.epic.com
-- Structured data: Patient, Condition (problem list), MedicationRequest, AllergyIntolerance, Observation (labs/vitals), Encounter, Procedure, DiagnosticReport — all accessible
-- **Clinical notes**: Cures Act mandates access to 8 note types (discharge summaries, H&P, progress notes, consultations, etc.) via DocumentReference
-- **Critical limitation**: Epic does not reliably populate `meta.lastUpdated` — cannot rely on FHIR-native change detection. Must build own temporal tracking by capturing periodic snapshots.
-- **Rate limits and session scope**: Pure real-time FHIR querying during a 15-minute encounter is infeasible for comprehensive data. Need a **persistent backend** that ingests data periodically via backend OAuth 2.0 or Bulk FHIR.
-- **Each hospital's FHIR configuration is different** — endpoint availability, resource types enabled, and write permissions vary by site.
-
----
-
-## Product Name: Andy
-
-**useandy.com** — "The AI that already reviewed the chart for you."
-
-Human names are the proven pattern in healthcare AI (Epic's "Art", Regard's "Max", Suki). The name conveys a helpful colleague, not a system claiming authority. Hospital buyers (CMIOs/CIOs) are tech-savvy and don't need clinical naming.
-
----
-
-## Customer and User
-
-**Buyer:** CMIO or VP of Population Health at a value-based care organization (IPA, ACO, large primary care group). They care about revenue capture, quality scores, and physician retention.
-
-**User:** Primary care physician (internal medicine / family medicine) doing pre-visit chart review in VBC practices. Sees 20+ patients/day, spends 5+ minutes per patient navigating charts.
-
-**Target patient profile:** Complex chronic Medicare patient — e.g., 67-year-old woman with Type 2 diabetes, hypertension, CKD stage 3, depression. Sees PCP quarterly, endocrinologist twice/year, nephrologist annually. 200+ notes across 15 years from 6+ providers. Problem list missing CKD. Medication list still shows metformin discontinued 4 months ago by nephrologist.
-
----
-
-## Why Pre-Visit is the Right Wedge
-
-Chart review (the *input* side — reading records to understand the patient) consumes 33% of all EHR time — the single largest activity, exceeding documentation (24%). The entire ambient scribe market ($600M, 30+ competitors) attacks documentation. Almost nobody attacks chart review.
-
-Pre-visit is the only workflow moment with **direct VBC revenue linkage** — HCC recapture and RAF score improvement happen here. One health system generated $18.5M in additional revenue from pre-visit HCC recapture (6x ROI). Care transitions are a bigger safety problem but require a different buyer and sales motion — that's the expansion path at 18-24 months.
-
-The "what changed since last visit" differential view appears to be an **unoccupied product position** — no tool in the market, including Navina, explicitly offers this.
-
----
-
-## What a PCP Reviews Pre-Visit (12 Data Types)
-
-Always reviewed: problem list, medication list, allergies, recent labs, recent vitals, last visit note, chief complaint.
-
-Usually reviewed: specialist consultation notes, imaging reports, care gaps/health maintenance, immunization status, hospitalization/ED records.
-
-Each maps to FHIR R4 with US Core profiles. The three data types most urgently needing temporal supersession detection: **problem lists** (40% of diagnoses missing), **medication lists** (60% have discrepancies), **clinical notes** (82% is copy-pasted/auto-imported).
-
----
-
-## Development Data Strategy (Finalized)
-
-### Epic's sandbox is useless for clinical AI
-~8 test patients, minimal data, no real notes, no messiness. Designed for OAuth testing, not product development.
-
-### Approach: LLM-based via API, not custom NLP training
-We use Claude/GPT-4 via API for note parsing, temporal reasoning, and contradiction detection. No custom model training needed. Specialized NLP datasets (i2b2, MedNLI) are used only as evaluation benchmarks to measure accuracy.
-
-### Development datasets (in priority order)
-
-| # | Dataset | What it is | Role for Andy |
-|---|---------|-----------|---------------|
-| 1 | **Synthea** | Free software that generates fake patients with realistic medical histories in FHIR R4. Longitudinal timelines of visits, diagnoses, medications, labs spanning years. | Core foundation. Generate 1,000+ primary care patients. Outputs 10 of 12 pre-visit data types natively. |
-| 2 | **Chatty-Notes + custom LLM pipeline** | Takes Synthea's structured data and uses LLMs to write realistic doctor notes for each visit. | Fill Synthea's biggest gap: it has no narrative clinical text. Generate progress notes, specialist letters, discharge summaries. |
-| 3 | **Error injection layer (we build)** | Script that deliberately breaks clean Synthea data to match real-world messiness. Every error is labeled with type, severity, and ground truth. | Make data realistic. Inject: ~40% missing problem list entries, ~60% medication discrepancies, ~50% copy-paste duplication, ~30% missing specialist notes. Creates labeled evaluation corpus. |
-| 4 | **MIMIC-IV-Note** | 331,000 real discharge summaries and 2.3M radiology reports from a Boston hospital. Real messy doctor-written text. | Style reference only. Use as examples of how real notes look (abbreviations, templates, copy-paste artifacts) to calibrate LLM note generation. NOT primary development data — it's ICU-only, no primary care. |
-
-### Evaluation benchmarks (not development data)
-
-| Dataset | What it tests |
-|---------|--------------|
-| **i2b2 2012 Temporal Relations** | Does our system correctly understand when things happened? (BEFORE, AFTER, OVERLAP) |
-| **MedNLI** | Does our contradiction detection work? (agrees / contradicts / unrelated) |
-| **EMNLP 2023 Clinical Contradiction** | Larger-scale contradiction detection accuracy |
-
-### Later-stage validation
-
-| Program | When | What it provides |
-|---------|------|-----------------|
-| **Mayo Clinic Platform_Accelerate** | When prototype works | 13.6M real patient records including primary care. Apply 3x/year. |
-
-### Why MIMIC-IV was downgraded from core to reference
-MIMIC-IV is exclusively ICU data from one hospital. It has no outpatient progress notes, no specialist referral letters, no primary care problem lists, no care gaps. Our product is for primary care pre-visit prep — MIMIC-IV doesn't match the clinical context. Use it only as a style guide for realistic note generation.
-
----
-
-## Development Quick Reference
-
-### Local MVP is fully buildable
-- Synthea + LLM notes + error injection gives you everything needed
-- Epic sandbox useful only for testing OAuth flow and FHIR API parsing
-- Epic's launchpad simulates in-Epic SMART on FHIR launch flow
-- Build and demo entire product on synthetic patients with contradictions, stale meds, outdated problems
-
-### When you need a hospital
-- First time you need a real hospital is for pilot (real patient data)
-- Hospital's IT team grants FHIR access — not Epic corporate
-- Epic Showroom listing is optional, helps scale later
-
-### Suggested stack (non-binding, for context)
-- Frontend: React (SMART on FHIR JS libraries exist)
-- Backend: Python/FastAPI (best AI/NLP ecosystem)
-- Database: PostgreSQL with temporal schema
-- AI: LLM via API (Claude/GPT-4) for clinical note parsing + temporal reasoning
-- Auth: OAuth 2.0 (required by SMART on FHIR spec)
-- Infra: AWS or GCP with HIPAA BAA
-
----
-
-## Strategy Decisions Log
-
-| Decision | Rationale |
-|----------|-----------|
-| **Start narrow** (temporal truth layer only) | 18 case studies: zero seed-stage companies succeeded broad. Expand to clinical intelligence platform at 18-24 months. |
-| **Pre-visit wedge** | 33% of EHR time is chart review. Only workflow moment with direct VBC revenue linkage. Far less competitive than during-encounter (ambient scribe) market. |
-| **Primary care first** | Highest chart review volume, longest patient relationships, VBC revenue alignment. Expand to ICU and ED later. |
-| **API not training** | Claude/GPT-4 handles clinical text well enough for MVP. Use NLP datasets for evaluation only. |
-| **Synthea over MIMIC-IV** | MIMIC-IV is ICU-only, no primary care. Synthea generates longitudinal primary care FHIR data matching our clinical context. |
-| **SF location** | UCSF and Stanford are innovation-friendly Epic hospitals 20 min away. Both already running AI inside SMART on FHIR. |
-
----
-
-## Key Risks (Honest Assessment)
-
-### Near-fatal risk: Timing
-- Build + validate: 12–18 months. Sell to first hospitals: 12–24 months. Total: 24–42 months.
-- Epic can ship competing features: 6–12 months from announcement.
-
-### Significant risks
-- Navina is one feature sprint away from adding temporal features
-- "Data quality" isn't a purchasing category — must sell as revenue/risk adjustment/safety
-- Clinical NLP accuracy — hallucination rates of 1.5–3.5% require robust fact-checking
-- Per-site deployment — each hospital requires individual configuration
-
-### Mitigating factors
-- Nobody has built this exact product (confirmed across exhaustive search)
-- The technical difficulty IS the moat — temporal supersession is genuinely hard
-- Cures Act legally protects data access ($1M/violation penalties)
-- Regard proves third-party-on-Epic model works at 150+ hospitals
-- FDA path is clear (Non-Device CDS exemption)
+## Competitive landscape summary
+- **40+ adjacent companies** across 5 categories (codebase context engines, AI-maintained docs, team wikis, agent memory, enterprise knowledge automation)
+- **$1.9B in funding** in the broader AI coding context category
+- **Nobody combines all 5 properties:** per-project scoped + self-maintaining + human knowledge + code knowledge + serves both humans and AI agents
+- **Closest threats:** Swimm 2.0 (4/5 properties, locked into legacy modernization), Potpie AI ($2.2M, code-only), Kodingo (appears vaporware)
+- **Edra** ($30M Sequoia) validates the core architecture (ingest scattered data → reconcile → serve humans + agents) but targets ITSM/operations, not engineering
+- **Platform risk:** Cursor has Memories + Team Rules + Notepads. Claude Code has hierarchical CLAUDE.md + Auto Memory. Copilot has Spaces. 12-18 month window before simplest use cases absorbed.
+
+## What Glean/Guru actually are (and aren't)
+- **Glean** ($7.2B valuation): Index over raw docs + RAG at query time. It's a search engine, not a KB. No reconciliation, no synthesis, no curation.
+- **Guru** ($63M ARR): Human-written cards with verification workflow + MCP server serving curated cards to agents. Closest from the KB side, but requires manual human curation — no autonomous synthesis from scattered sources.
+- **Confluence/Notion MCP:** Thin CRUD wrappers returning raw pages as markdown. No curation layer.
+
+## Demand signals
+- CLAUDE.md files prove developers are building scoped KBs manually today
+- awesome-cursorrules repo: 37,800 GitHub stars for a collection of config files
+- AGENTS.md adopted in 60,000+ repos, governed by Linux Foundation
+- Research: AGENTS.md files reduced agent runtime by 29% and output tokens by 17%
+- ETH Zurich finding: human-written context improves agent performance; auto-generated context hurts it (-3% success rate)
+- Karpathy's "LLM Wiki" post (April 4, 2026): 11M+ views, called it "an incredible new product"
+
+## Pricing and unit economics
+- $20-50/seat/month validated by comparable tools: Cursor Teams ($40), Copilot Enterprise ($39), Sourcegraph ($59), Guru ($25)
+- 72-89% gross margins at these price points
+- ROI math: at $150K loaded salary ($72/hr), saving 15-30 min/day = $396-792/month value vs $20-50 tool cost
+- For 100-engineer team at $40/seat: $48K ACV
+
+## Key risks
+1. **Platform absorption** (12-18 month window) — Cursor/Claude Code/Copilot building native context management
+2. **KM graveyard** (50-70% failure rate) — if positioned as wiki/KM instead of AI coding infrastructure
+3. **Can't auto-generate enough content** — if it requires human writing effort, it fails like every wiki
+4. **Unclear buyer** — engineering lead? VP Eng? DevEx team? Nobody clearly owns this budget
+5. **Feature vs product** — could be an MCP server plugin, not a standalone company
+
+## The thesis novelty (~70% known, ~30% genuinely novel)
+Individual observations are well-documented: wikis fail at scale, teams fragment naturally, smaller scope = higher quality, data mesh (Dehghani 2019) made the same argument for data platforms. What's new is the specific synthesis: coherence as the binding constraint, deliberate scope reduction as the solution, and the explicit rejection of org-wide coherence as a goal. No product, paper, blog post, or founder has assembled these pieces. Every incumbent is architecturally committed to the opposite philosophy — they can't copy this without contradicting their core product.
+
+## Distribution playbook
+- MCP integration on day one (universal socket for AI agents)
+- IDE-native presence (where developers already work)
+- Git-native storage (docs in repo, lowest adoption friction)
+- Mintlify proved this playbook: $0 → $10M ARR via docs-as-code + YC network
