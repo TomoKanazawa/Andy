@@ -55,3 +55,13 @@ ml/prototype_a/cases/
 ml/prototype_a/prepared/
 ml/prototype_a/results.md
 ml/**/__pycache__/
+
+# MIMIC-IV raw data + derived case files — DUA-protected, never commit
+/physionet.org/
+ml/prototype_b/data/
+ml/prototype_b/selected_admissions.json
+# Per-case results contain real MIMIC ICD codes/titles — keep ignored
+ml/prototype_b/results_*.json
+ml/prototype_b/results_*.md
+# Aggregate-only summary IS commitable (no PHI / no per-case dx)
+!ml/prototype_b/results_summary.md
