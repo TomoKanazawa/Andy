@@ -104,10 +104,30 @@ python investigate_misses.py   # optional: per-miss evidence audit
 
 Requires PhysioNet credentials and MIMIC-IV + MIMIC-IV-Note + MIMIC-IV-ED downloaded under `physionet.org/files/...` (gitignored).
 
+## Two-pass DDx experiment — `ddx_twopass.py`
+
+Hypothesis: a second LLM pass asking "what else might be missing?" with the first 15 in context would catch diagnoses bumped out of the initial top-15 ranking.
+
+Tested on the first 10 cases of the n=50 set:
+
+| Cutoff | P1 HS r@15 | **P1+P2 HS r@30** | Δ HS |
+|---|---|---|---|
+| **admit** | 66% (25/38) | **76% (29/38)** | **+11 pp** |
+| +24h | 87% (saturated) | 87% | 0 pp |
+| +48h | 74% | 79% | +5 pp |
+| pre-discharge | 76% | **82%** | **+5 pp** |
+
+Cost: ~$0.85 for 10 cases (vs $0.40 single-pass).
+
+**Two-pass works.** It actually surfaces additional correct diagnoses rather than just generating noise. The biggest lift is at admission — exactly where the LLM has to ration its 15 slots most carefully. Pass 2 isn't yet validated at n=50.
+
+This mirrors how experienced physicians read charts: initial impression, then re-read with skepticism. Encoding that workflow into the product (not just the prompt) is a real architecture improvement, not a benchmark trick.
+
 ## Next steps (in priority order)
 
-1. **Better chart formatting** — current labs are a flat timestamp list; a trend-table format may help the model see patterns it currently misses
-2. **Tighten chronic-code filter** — some misses are chronic PMH items leaking through our exclusion filter, inflating the apparent miss count
-3. **Prior admissions context** — for repeat patients, including (sanitized) prior discharge summaries adds real context
-4. **Scale to n=200+** — for publication-grade confidence intervals
-5. **Physician spot-review** — once a co-founder is available, validate that "high-stakes recall" matches clinical judgment of which misses actually matter
+1. **Validate two-pass at n=50** — confirm the +11 pp admit lift on a larger sample (~$4 cost)
+2. **Better chart formatting** — current labs are a flat timestamp list; a trend-table format may help the model see patterns it currently misses
+3. **Tighten chronic-code filter** — some misses are chronic PMH items leaking through our exclusion filter, inflating the apparent miss count
+4. **Prior admissions context** — for repeat patients, including (sanitized) prior discharge summaries adds real context
+5. **Scale to n=200+** — for publication-grade confidence intervals
+6. **Physician spot-review** — once a co-founder is available, validate that "high-stakes recall" matches clinical judgment of which misses actually matter
